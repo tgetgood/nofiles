@@ -1,0 +1,2 @@
+{:deps {com.datomic/datomic-free {:mvn/version "0.9.5697"}}
+ :paths ["src"]}
