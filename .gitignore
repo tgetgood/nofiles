@@ -7,3 +7,4 @@ pom.xml
 .repl
 .nrepl-port
 .cpcache
+datomic/
