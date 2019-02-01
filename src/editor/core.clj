@@ -137,11 +137,7 @@
    {:db/ident :map.element/value
     :db/isComponent true
     :db/cardinality :db.cardinality/one
-    :db/valueType :db.type/ref}
-
-
-   ]
-  )
+    :db/valueType :db.type/ref}])
 
 (defprotocol Datomify
   (tx [this]))
@@ -183,6 +179,39 @@
      :form/type :type/set
      :set/element (map tx v)})
 
+  clojure.lang.PersistentVector
+  (tx [v]
+    {:db/id (d/tempid :db.part/user)
+     :form/type :type/vector
+     :vector/element (map-indexed (fn [i x]
+                                    {:db/id (d/tempid :db.part/user)
+                                     :vector.element/index i
+                                     :vector.element/value (tx x)})
+                                  v)})
+
+  clojure.lang.PersistentHashMap
+  (tx [v]
+    {:db/id (d/tempid :db.part/user)
+     :form/type :type/map
+     :map/element (map (fn [[k v]]
+                         {:db/id (d/tempid :db.part/user)
+                          :map.element/key (tx k)
+                          :map.element/value (tx v)})
+                       v)})
+
+  ;; FIXME: Identical implementations... use extend
+  clojure.lang.PersistentArrayMap
+  (tx [v]
+    (println (meta v))
+    (let [tid (if (:top (meta v)) "top-level" (d/tempid :db.part/user))]
+      {:db/id tid
+       :form/type :type/map
+       :map/element (map (fn [[k v]]
+                           {:db/id (d/tempid :db.part/user)
+                            :map.element/key (tx k)
+                            :map.element/value (tx v)})
+                         v)}))
+
   clojure.lang.PersistentList
   (tx [[h & t]]
     (merge {:db/id (d/tempid :db.part/user)
@@ -219,11 +248,22 @@
 
 (defmethod clojurise :type/list
   [{:keys [:list/head :list/tail] :as x}]
-  (cons (clojurise head) (when tail (clojurise tail))))
+  (conj (when tail (clojurise tail)) (clojurise head)))
+
+(defmethod clojurise :type/vector
+  [{:keys [:vector/element]}]
+  (into [] (comp (map :vector.element/value) (map clojurise))
+        (sort-by :vector.element/index element)))
+
+(defmethod clojurise :type/map
+  [{:keys [:map/element]}]
+  (into {} (map (fn [{:keys [:map.element/key :map.element/value]}]
+                  [(clojurise key) (clojurise value)]))
+        element))
 
 (defn save-to-datomic! [conn data]
   ;; TODO: return id of new entity, not entire tx log
-  (d/transact conn [(tx data)]))
+  (get (:tempids @(d/transact conn [(tx (with-meta data {:top true}))])) "top-level"))
 
 (defn pull-from-datomic! [db eid]
   (clojurise (d/pull db '[*] eid)))
