@@ -1,5 +1,6 @@
 (ns editor.core
   (:require [clojure.datafy :refer [datafy]]
+            [clojure.pprint :refer [pprint]]
             [datomic.api :as d]
             [editor.db :refer [conn]]
             [editor.io :refer [datomify clojurise]]))
@@ -43,43 +44,23 @@
     (let [res (apply f (map pull-from-datomic! args))]
       (save-to-datomic! res))))
 
-(defn get-ns [db branch ns]
-  (d/q '[:find ?ns . :in $ ?branch ?ns-name
-         :where
-         [?vid :version/tag ?branch]
-         [?vid :version/namespace ?ns]
-         [?ns :namespace/name ?ns-name]]
-       db branch ns))
+(def empty-codebase
+  {:topology {}
+   :namespaces {:dumpalump.core {:test '(fn [] "I do nothing.")}}})
 
-(defn get-eid [db branch ns sym]
-  (d/q '[:find ?eid .
-         :in $ ?branch ?ns-name ?sym-name
-         :where
-         [?vid :version/tag ?branch]
-         [?vid :version/namespace ?ns]
-         [?ns :namespace/name ?ns-name]
-         [?ns :namespace/binding ?b]
-         [?b :namespace.binding/symbol ?sym-name]
-         [?b :namespace.binding/form ?eid]]]
-  db branch ns sym))
+(def create-master-tx
+  [{:version/tag :master
+    :version/namespace (datomify empty-codebase)}])
 
-(defn create-sym-and-ns-tx [branch ns-name sym]
-  [{:version/tag branch
-    :version/namespace
-    {:namespace/name ns-name
-     :namespace/binding
-     {:namespace.binding/name ns-name
-      :namespace.binding/form
-      {:db/id "new-form"}}}}])
+(defn pull-var [sym]
+  (get-in
+   (clojurise
+    (d/q '[:find (pull ?x [*]) .
+           :where
+           [?e :version/tag :master]
+           [?e :version/namespace ?x]]
+         (d/db conn)))
+   [:namespaces (keyword (namespace sym)) (keyword (name sym))]))
 
-(defn create-)
-
-(defn create-or-load-sym [branch sym]
-  (let [ns (namespace sym)
-        n (name sym)
-        db (d/db conn)
-        time (dec (d/next-t db))]
-    (cond
-      {:eid eid :time time}
-      )
-    ))
+(defn str-v [sym]
+  (with-out-str (pprint (pull-var sym))))
