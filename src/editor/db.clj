@@ -176,7 +176,7 @@
     :db/cardinality :db.cardinality/many}
 
    {:db/ident :namespace/name
-    :db/valueType :db.type/keyword
+    :db/valueType :db.type/string
     ;; Should this be unique?
     :db/cardinality :db.cardinality/one}
 
@@ -184,8 +184,8 @@
     :db/valueType :db.type/ref
     :db/cardinality :db.cardinality/many}
 
-   {:db/ident :namespace.binding/name
-    :db/valueType :db.type/keyword
+   {:db/ident :namespace.binding/symbol
+    :db/valueType :db.type/string
     :db/cardinality :db.cardinality/many}
 
    {:db/ident :namespace.binding/form
