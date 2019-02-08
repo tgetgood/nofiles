@@ -1,8 +1,6 @@
 (ns editor.db
   (:require [datomic.api :as d]))
 
-(def db-uri "datomic:mem://test" #_"datomic:free://localhost:4334/dummy")
-
 (def schema
   [
    ;; Clojure data types (partial list))
@@ -192,12 +190,14 @@
     :db/valueType :db.type/ref
     :db/cardinality :db.cardinality/one}])
 
-(defn reset-db!
-  "Deletes DB, recreates it and adds schema. Only use for early dev."
-  []
-  (d/delete-database db-uri)
-  (d/create-database db-uri)
-  (d/transact (d/connect db-uri) schema)
-  (d/transact (d/connect db-uri) [{:version/tag :master}]))
+(def db-uri "datomic:mem://test" #_"datomic:free://localhost:4334/dummy")
 
-(def conn (d/connect db-uri))
+(def conn
+  "Deletes DB, recreates it and adds schema. Only use for early dev."
+  (do
+    (d/delete-database db-uri)
+    (d/create-database db-uri)
+    (let [c (d/connect db-uri)]
+      (d/transact c schema)
+      (d/transact c [{:version/tag :master}])
+      c)))
