@@ -1,9 +1,12 @@
 (ns editor.core
   (:require [clojure.datafy :refer [datafy]]
-            [clojure.pprint :refer [pprint]]
             [datomic.api :as d]
-            [editor.db :refer [conn]]
-            [editor.io :refer [datomify clojurise]]))
+            editor.db
+            [editor.io :refer [clojurise datomify]]
+            [falloleen.core :as f]
+            falloleen.hosts))
+
+(def conn editor.db/conn)
 
 ;;;;; Read/Write forms to datomic
 
@@ -45,8 +48,11 @@
       (save-to-datomic! res))))
 
 (def empty-codebase
-  {:topology {}
-   :namespaces {:dumpalump.core {:test '(fn [] "I do nothing.")}}})
+  {:topology {:renderer {:in #{:animation-frame} :def 'dumpalump.core/base-render}}
+   :namespaces {:dumpalump.core {:test '(fn [] "I do nothing.")
+                                 :base-render '(fn [frame]
+                                                 [(assoc f/circle
+                                                         :radius 100)])}}})
 
 (def create-master-tx
   [{:version/tag :master
@@ -62,5 +68,9 @@
          (d/db conn)))
    [:namespaces (keyword (namespace sym)) (keyword (name sym))]))
 
-(defn str-v [sym]
+#_(defn str-v [sym]
   (with-out-str (pprint (pull-var sym))))
+
+(defonce host (falloleen.hosts/default-host {:size [1000 1000]}))
+
+(f/draw! [(assoc f/circle :radius 200)] host)
