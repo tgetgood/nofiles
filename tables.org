@@ -3,39 +3,28 @@
 
 	SQL is built on relational algebra.
 
-	A table is a function from the primary key into the space defined by the
-	columns.
+	A table is a function from the primary key into the space defined by
+	the columns.
 
 	Example:
 
-	| ID | Size | Shape    | Colour        | Description        |
-	|----+------+----------+---------------+--------------------|
-	|  1 |    4 | square   | (0, 70, 255)  | "Kind of blockish" |
-	|  2 |    3 | oblong   | (255, 0, 255) | "Not quite round"  |
-	|  3 |    7 | triangle | (0, 0, 0)     | "Pointy!"          |
-	|    |      |          |               |                    |
+	| ID | Size | Shape    | Colour  | Description        |
+	|----+------+----------+---------+--------------------|
+	|  1 |    4 | square   | #00A2FF | "Kind of blockish" |
+	|  2 |    3 | oblong   | #777777 | "Not quite round"  |
+	|  3 |    7 | triangle | #FFFFFF | "Pointy!"          |
+	|    |      |          |         |                    |
 	...
 
 	This table maps IDs into the space of (size, shape, colour, description).
 
 	At the end of the day, it's just a function!
 
-* Datomic Tuple
-** Facts
-	 Datomic is also built on relational algebra.
-
-	 But the kinds of functions you can define is much more restricted.
-
-	 Datomic builds data from facts.
-
-	 A fact is a single, atomic piece of information asserted at a particular
-	 time.
-
-	 E.g.: My phone number is 555-1234 as of now.
+* Datomic
 ** EAV
-	 In Datomic, all functions have "simple" ranges.
+	 By contrast, in Datomic all functions have "simple" ranges.
 
-	 In other words, tables only have one non-id column.
+	 In other words, tables only have one variable column.
 
 	 | ID | Size |
 	 |----+------|
@@ -43,18 +32,24 @@
 	 |  2 |    3 |
 	 |  3 |    7 |
 
+	 Which means that we need one table per data attribute.
+
 	 | ID | Shape    |
 	 |----+----------|
 	 |  1 | square   |
 	 |  2 | oblong   |
 	 |  3 | triangle |
 
-	 This is sometimes called a schema in Sixth Normal Form.
+	 ...
+
+	 This is the basis of RDF and is sometimes called a schema in Sixth
+	 Normal Form, but we're not going to talk about that.
 
 ** Datoms
-	 Atomic Facts (data) are called datoms in Datomic.
+	 Atomic Facts (data) are called datoms in Datomic and they're
+	 actually a little more complicated.
 
-	 Datoms are tuples of the type [E A V Tx Op] Where:
+	 Datoms are tuples of the form [E A V Tx Op]
 
 	 E: an entity ID (just like a primary key in sql).
 
@@ -66,17 +61,46 @@
 
 	 Op: is this an assertion that the fact is true, or false?
 
-** EAVT
+** Tx Log
+
 	 So we can see that our table analogy was a slight lie.
 
-	 Tables in Datomic only have one column *that you can control*.
+	 It turns out to be easier to think about a Datomic DB in terms of
+	 the log, or list of all datoms seen so far.
 
-	 They really look like this:
+	 The first table could have been derived from this log:
 
-	 | ID | Size | Tx | Op   |
-	 |----+------+----+------|
-	 |  1 |    4 |  1 | True |
-	 |  2 |    3 |  2 | True |
-	 |  3 |    7 |  3 | True |
-** Schemata
+	 | E | A       | V         | Tx | Op    |
+	 |---+---------+-----------+----+-------|
+	 | 1 | :size   | 4         |  1 | true  |
+	 | 1 | :shape  | :square   |  1 | true  |
+	 | 1 | :colour | "#00A2FF" |  1 | true  |
+	 | 2 | :size   | 5         |  2 | true  |
+	 | 2 | :shape  | :oblong   |  2 | true  |
+	 | 2 | :colour | "#777777  |  2 | true  |
+	 | 3 | :size   | 7         |  3 | true  |
+	 | 3 | :shape  | :triangle |  3 | true  |
+	 | 3 | :colour | "#FFFFFF" |  3 | true  |
+	 | 2 | :size   | 3         |  4 | true  |
+	 | 2 | :size   | 5         |  4 | false |
+
+	 Note the last Tx which retracts the previous :size of entity 2 and
+	 replaces it.
+** Schema
+	 Each attribute is itself an entity. A schema in Datomic is just the
+	 data description of those attribute entities.
+
+	 A typical attribute might look like this:
+
+	 #+BEGIN_SRC clojure
+
+	 {:db/ident       :size
+		:db/doc         "The size of the thing"
+		:db/cardinality :db.cardinality/one
+		:db/isComponent true
+		:db/valueType   :db.type/long}
+
+	 #+END_SRC
+
+	 Data types stored in Datomic are very low level. If you want to store
 ** Indicies

@@ -1,17 +1,9 @@
 (ns editor.core
   (:require [clojure.datafy :refer [datafy]]
             [datomic.api :as d]
-            editor.db
-            [editor.io :refer [clojurise datomify]]
-            [falloleen.core :as f]
-            )
-  (:import [javafx.application Application Platform]
-           [javafx.scene.canvas Canvas GraphicsContext]
-           javafx.scene.layout.StackPane
-           javafx.scene.Scene
-           javafx.stage.Stage))
-
-(def conn editor.db/conn)
+            [editor.db :refer [conn]]
+            [editor.io :refer [clojurise datomify]])
+  )
 
 ;;;;; Read/Write forms to datomic
 
@@ -72,10 +64,3 @@
            [?e :version/namespace ?x]]
          (d/db conn)))
    [:namespaces (keyword (namespace sym)) (keyword (name sym))]))
-
-#_(defn str-v [sym]
-  (with-out-str (pprint (pull-var sym))))
-
-(def host (falloleen.hosts/default-host {:size [1000 1000]}))
-
-(f/draw! [(assoc f/circle :radius 200)] host)
