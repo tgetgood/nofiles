@@ -37,25 +37,33 @@
    [:find [?e ...]
     :where [?e :long/value 6]]))
 
-(def complex-query
-  "Find all of the map keys used to refer to function literals with 2 or more args"
+(def anonymous-fns-with-bad-arg-names
+  "How many functions use single letter variables?"
   (quote
-   [:find [?k ...]
-    :in $ ?min-args
+   [
+    ;; :find (count ?f) ?name
+    :find (count-distinct ?f) .
     :where
-    [?e :map.element/key ?key]
-    [?key :keyword/value ?k]
-    [?e :map.element/value ?val]
-    [?val :form/type :type/list]
-    [?val :list/head ?h]
-    [?h :symbol/value "fn"]
-    [(dec ?min-args) ?min-index]
-    [?val :list/tail ?t]
+    [?f :form/type :type/list]
+    [?f :list/head ?h]
+    [?h :symbol/value ?sym]
+    [(= ?sym "fn")]
+    [?f :list/tail ?t]
     [?t :list/head ?args]
     [?args :vector/element ?el]
-    [?el :vector.element/index ?i]
-    [(= ?i ?min-index)]
-    ]))
+    [?el :vector.element/value ?arg]
+    [?arg :symbol/value ?name]
+    [(count ?name) ?len]
+    ;; [(!= ?name "&")]
+    [(= ?len 1)]]))
+
+(def count-defns
+  (quote
+   [:find (count ?v)
+    :where
+    [?v]])
+  )
+
 
 ;;;;; Index the source code of this project in the DB.
 
@@ -68,3 +76,12 @@
   (db/reset-db!)
   (let [sources (map str (.listFiles (File. "src/editor/")))]
     (run! #(d/transact conn [(datomify-src %)]) sources)))
+
+(defn example-1
+  "This is where a doc string goes"
+  [x y]
+  (+ x y))
+
+(defn example-2 [x y]
+  "This is not where the docstring goes"
+  (+ x y))
