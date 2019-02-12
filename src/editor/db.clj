@@ -1,5 +1,6 @@
 (ns editor.db
-  (:require [datomic.api :as d]))
+  (:require [datomic.api :as d])
+  )
 
 (def schema
   [
@@ -16,7 +17,9 @@
    {:db/ident :type.number/double}
    {:db/ident :type/string}
    {:db/ident :type/keyword}
+   {:db/ident :type/boolean}
    {:db/ident :type/symbol}
+   {:db/ident :type/nil}
    {:db/ident :type/list}
    {:db/ident :type/vector}
    {:db/ident :type/set}
@@ -43,6 +46,11 @@
     :db/doc         "Value of a String"
     :db/cardinality :db.cardinality/one
     :db/valueType   :db.type/string}
+
+   {:db/ident       :boolean/value
+    :db/doc         "value of a bool"
+    :db/cardinality :db.cardinality/one
+    :db/valueType   :db.type/boolean}
 
    {:db/ident       :symbol/value
     :db/doc         "Name of a Symbol"
@@ -98,11 +106,14 @@
 
 (def db-uri "datomic:mem://demo")
 
-(def conn
+(def conn nil)
+
+(defn reset-db! []
   "Deletes DB, recreates it and adds schema. Only use for early dev."
-  (do
-    (d/delete-database db-uri)
-    (d/create-database db-uri)
-    (let [c (d/connect db-uri)]
-      (d/transact c schema)
-      c)))
+  (d/delete-database db-uri)
+  (d/create-database db-uri)
+  (let [c (d/connect db-uri)]
+    (d/transact c schema)
+    (alter-var-root #'conn (constantly c))))
+
+(reset-db!)

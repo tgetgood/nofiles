@@ -3,6 +3,7 @@
             [datomic.api :as d]
             [editor.db :refer [conn]]
             [editor.io :refer [clojurise datomify]])
+  (:import [java.io File])
   )
 
 ;;;;; Read/Write forms to datomic

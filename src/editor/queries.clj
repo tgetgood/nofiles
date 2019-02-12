@@ -1,9 +1,6 @@
 (ns editor.queries
   (:require [editor.db :refer [conn]]))
 
-(def form-spec
-  [:]
-  )
 
 (defn save-to-datomic! [data]
   (let [tx-data (datomify data)

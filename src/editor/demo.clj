@@ -1,7 +1,8 @@
 (ns editor.demo
-  (:require [editor.db :refer [conn]]
+  (:require [editor.db :as db :refer [conn]]
             [editor.io :refer [clojurise datomify]]
-            [datomic.api :as d]))
+            [datomic.api :as d])
+  (:import [java.io File]))
 
 
 (def six
@@ -55,3 +56,15 @@
     [?el :vector.element/index ?i]
     [(= ?i ?min-index)]
     ]))
+
+;;;;; Index the source code of this project in the DB.
+
+(defn datomify-src [fname]
+  (let [raw-source (slurp fname)
+            sexps (read-string (str "[" raw-source "]"))]
+        (datomify sexps)))
+
+(defn reindex-code! []
+  (db/reset-db!)
+  (let [sources (map str (.listFiles (File. "src/editor/")))]
+    (run! #(d/transact conn [(datomify-src %)]) sources)))
