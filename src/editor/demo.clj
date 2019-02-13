@@ -1,5 +1,6 @@
 (ns editor.demo
-  (:require [editor.core :refer [push! pull!]]
+  (:require [clojure.pprint :refer [pprint]]
+            [editor.core :refer [push! pull!]]
             [editor.db :as db :refer [conn]]
             [editor.io :refer [clojurise datomify cps]]
             [datomic.api :as d])
@@ -14,7 +15,9 @@
     :where [?e :symbol/value ?v]]))
 
 (d/q count-uses (d/db conn) "conj")
+
 (d/q count-uses (d/db conn) "fn")
+
 (d/q count-uses (d/db conn) "defmethod")
 
 ;; Find the ten most common symbols in your codebase.
@@ -25,14 +28,74 @@
      (sort-by val >)
      (take 10))
 
+;;;;; defns and rules
+
+(def count-defns
+  (quote
+   [:find (count ?v) .
+    :where
+    [?v :list/head ?h]
+    [?h :symbol/value ?sym]
+    [(= ?sym "defn")]]))
+
+(d/q count-defns (d/db conn))
+
+;;; A common error
+
+(defn example-1
+  "This is where a doc string goes"
+  [x y]
+  (+ x y))
+
+(defn example-2 [x y]
+  "This is not where the docstring goes"
+  (+ x y))
+
+(def documented-defns
+  (quote
+   [:find (count ?v) .
+    :where
+    [?v :list/head ?h]
+    [?h :symbol/value ?sym]
+    [(= ?sym "defn")]
+    [?v :list/tail ?t]
+    [?t :list/tail ?t2]
+    [?t2 :list/head ?doc]
+    [?doc :form/type :type/string]]))
+
+(d/q documented-defns (d/db conn))
+
+(def defn-rule
+  '[[(defn? ?v)
+      [?v :list/head ?h]
+      [?h :symbol/value ?sym]
+      [(= ?sym "defn")]]])
+
+(def improperly-documented-fns
+  (quote
+   [
+    :find (count ?v) .
+    ;; :find [(pull ?v cps) ...]
+    :in $ % cps
+    :where
+    [defn? ?v]
+    [?v :list/tail ?t]
+    [?t :list/tail ?t2]
+    [?t2 :list/tail ?t3]
+    [?t3 :list/head ?doc]
+    [?doc :form/type :type/string]]))
+
+(d/q improperly-documented-fns (d/db conn) defn-rule cps)
+
+(map clojurise
+ (d/q improperly-documented-fns (d/db conn) defn-rule cps))
+
+;;;;; Linting with queries
+
 (def anonymous-fns-with-bad-arg-names
   "How many functions use single letter variables?"
   (quote
-   [
-    :find (count ?f) ?name
-    ;; :find [(count ?f) (count-distinct ?f)]
-    ;; :find [(pull ?f cps) ...]
-    ;; :in $ cps
+   [:find (count ?f) ?name
     :where
     [?f :form/type :type/list]
     [?f :list/head ?h]
@@ -47,39 +110,12 @@
     ;; [(!= ?name "&")]
     [(= ?len 1)]]))
 
-;;;;; defns and rules
+(d/q anonymous-fns-with-bad-arg-names (d/db conn))
 
-(def count-defns
-  (quote
-   [:find (count ?v) .
-    :where
-    [?v :list/head ?h]
-    [?h :symbol/value ?sym]
-    [(= ?sym "defn")]]))
+;; Silly example
 
-(def documented-defns
-  (quote
-   [:find (count ?v) .
-    :where
-    [?v :list/head ?h]
-    [?h :symbol/value ?sym]
-    [(= ?sym "defn")]
-    [?v :list/tail ?t]
-    [?t :list/tail ?t2]
-    [?t2 :list/head ?doc]
-    [?doc :form/type :type/string]]))
-
-(def improperly-documented-fns
-  (quote
-   [:find (count ?v) .
-    :where
-    [?v :list/head ?h]
-    [?h :symbol/value ?sym]
-    [(= ?sym "defn")]
-    [?v :list/tail ?t]
-    [?t :list/tail ?t2]
-    [?t2 :list/head ?doc]
-    [?doc :form/type :type/string]]))
+(fn [f & r]
+  (conj r f))
 
 ;;;;; OR and query inputs
 
@@ -95,6 +131,9 @@
      [(= ?sym "defmacro")]
      [(= ?sym "defmulti")]
      [(= ?sym "defprotocol")])]))
+
+(d/q count-vars (d/db conn))
+
 
 (def count-vars-smart
   (quote
@@ -112,30 +151,4 @@
       "defmulti"
       "defprotocol"])
 
-;;;;; Index the source code of this project in the DB.
-
-(defn datomify-src [fname]
-  (let [raw-source (slurp fname)
-            sexps (read-string (str "[" raw-source "]"))]
-        (datomify sexps)))
-
-(defn reindex-code! []
-  (db/reset-db!)
-  (let [sources (->> "src/editor/"
-                     #_"../reference/clojure/src/clj/clojure"
-                     File.
-                     .listFiles
-                     (map str)
-                     (filter (partial re-seq #"\.clj$")))]
-    (run! #(d/transact conn [(datomify-src %)]) sources)))
-
-(defn example-1
-  "This is where a doc string goes"
-  [x y]
-  (+ x y))
-
-(defn example-2 [x y]
-  "This is not where the docstring goes"
-  (+ x y))
-
-(reindex-code!)
+;;; Change over time

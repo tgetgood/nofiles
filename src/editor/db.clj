@@ -20,6 +20,7 @@
    {:db/ident :type/boolean}
    {:db/ident :type/symbol}
    {:db/ident :type/nil}
+   {:db/ident :type/regex}
    {:db/ident :type/list}
    {:db/ident :type/vector}
    {:db/ident :type/set}
@@ -54,6 +55,11 @@
 
    {:db/ident       :symbol/value
     :db/doc         "Name of a Symbol"
+    :db/cardinality :db.cardinality/one
+    :db/valueType   :db.type/string}
+
+   {:db/ident       :regex/value
+    :db/doc         "Regex pattern"
     :db/cardinality :db.cardinality/one
     :db/valueType   :db.type/string}
 

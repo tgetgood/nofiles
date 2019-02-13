@@ -36,6 +36,12 @@
      :form/type     :type/boolean
      :boolean/value v})
 
+  java.util.regex.Pattern
+  (tx [v id]
+    {:db/id        id
+     :form/type    :type/regex
+     :regex/value (str v)})
+
   clojure.lang.Symbol
   (tx [v id]
     {:db/id        id
