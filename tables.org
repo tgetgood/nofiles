@@ -102,5 +102,25 @@
 
 	 #+END_SRC
 
-	 Data types stored in Datomic are very low level. If you want to store
+	 Datomic provides basic types (long, double, string, keyword, date, ...) but
+	 can't store arbitrary clojure data (except as a string).
+
+	 Let's fix that and write a schema for the Clojure AST, otherwise know as
+	 S-expressions (plus data literals).
 ** Indicies
+	 Since everything is stored as a triple, there are only 6 possible
+	 indicies. Of these, Datomic only makes 4, because frankly the others aren't
+	 useful.
+
+	 It's best to think about the indicies as edges in a graph that you can
+	 quickly traverse to get from one piece of information to another.
+
+	 The indicies are:
+
+	 EAVT: Entity -> Attribute -> Value | I.E. lookup
+
+	 VAET: (only on attributes of type ref, we don't want to index primitives).
+
+	 AEVT: This index provides column search in a traditional DB
+
+	 AVET: This index is expensive to maintain, and so isn't enabled by default.

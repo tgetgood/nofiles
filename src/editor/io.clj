@@ -4,7 +4,10 @@
 (defprotocol Datomify
   (tx [this tempid]))
 
-(defn datomify [data]
+(defn datomify
+  "Return Datomic tx object for given clojure data. Tempid of data is attached
+  as metadata."
+  [data]
   (let [id (str (gensym))]
     (with-meta (tx data id) {:tempid id})))
 
@@ -122,6 +125,10 @@
   [{:keys [:keyword/value]}]
   value)
 
+(defmethod clojurise :type/boolean
+  [{:keys [:boolean/value]}]
+  value)
+
 (defmethod clojurise :type/symbol
   [{:keys [:symbol/value]}]
   (symbol value))
@@ -148,3 +155,21 @@
   (into {} (map (fn [{:keys [:map.element/key :map.element/value]}]
                   [(clojurise key) (clojurise value)]))
         element))
+
+(def cps
+  '[:form/type
+    :long/value
+    :double/value
+    :string/value
+    :keyword/value
+    :symbol/value
+    :boolean/value
+    :vector.element/index
+    {:set/element          ...
+     :list/head            ...
+     :list/tail            ...
+     :vector/element       ...
+     :vector.element/value ...
+     :map/element          ...
+     :map.element/key      ...
+     :map.element/value    ...}])

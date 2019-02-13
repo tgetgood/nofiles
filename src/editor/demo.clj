@@ -1,48 +1,38 @@
 (ns editor.demo
-  (:require [editor.db :as db :refer [conn]]
-            [editor.io :refer [clojurise datomify]]
+  (:require [editor.core :refer [push! pull!]]
+            [editor.db :as db :refer [conn]]
+            [editor.io :refer [clojurise datomify cps]]
             [datomic.api :as d])
   (:import [java.io File]))
 
+;;;;; Queries
 
-(def six
-  {:form/type :type.number/long
-   :long/value 6})
-
-(def test-set
-  (datomify #{2 3 7 19 27 6 1 91 1000}))
-
-(def tx
-  @(d/transact conn [six test-set]))
-
-(def maps-with-fns
-  '[{:type impl
-     :construct   (fn [x] x)}
-    {:type :collection
-     :vals [{:f1 (fn [x y] (+ y (* 3 x))) :f2 conj :key :seven}]}
-    {:type unknown
-     :construct (fn [] {})}
-    {:growth  3.7
-     :vanity  :high
-     :feed-fn (fn [food] (force (down food)))}])
-
-(def query
+(def count-uses
   (quote
-   [:find ?v .
-    :in $ ?e
-    :where [?e :long/value ?v]]))
+   [:find (count ?e) .
+    :in $ ?v
+    :where [?e :symbol/value ?v]]))
 
-(def bad-query
-  (quote
-   [:find [?e ...]
-    :where [?e :long/value 6]]))
+(d/q count-uses (d/db conn) "conj")
+(d/q count-uses (d/db conn) "fn")
+(d/q count-uses (d/db conn) "defmethod")
+
+;; Find the ten most common symbols in your codebase.
+
+(->> (d/q '[:find ?e ?v :where [?e :symbol/value ?v]] (d/db conn))
+     (map second)
+     frequencies
+     (sort-by val >)
+     (take 10))
 
 (def anonymous-fns-with-bad-arg-names
   "How many functions use single letter variables?"
   (quote
    [
-    ;; :find (count ?f) ?name
-    :find (count-distinct ?f) .
+    :find (count ?f) ?name
+    ;; :find [(count ?f) (count-distinct ?f)]
+    ;; :find [(pull ?f cps) ...]
+    ;; :in $ cps
     :where
     [?f :form/type :type/list]
     [?f :list/head ?h]
@@ -57,13 +47,70 @@
     ;; [(!= ?name "&")]
     [(= ?len 1)]]))
 
+;;;;; defns and rules
+
 (def count-defns
   (quote
-   [:find (count ?v)
+   [:find (count ?v) .
     :where
-    [?v]])
-  )
+    [?v :list/head ?h]
+    [?h :symbol/value ?sym]
+    [(= ?sym "defn")]]))
 
+(def documented-defns
+  (quote
+   [:find (count ?v) .
+    :where
+    [?v :list/head ?h]
+    [?h :symbol/value ?sym]
+    [(= ?sym "defn")]
+    [?v :list/tail ?t]
+    [?t :list/tail ?t2]
+    [?t2 :list/head ?doc]
+    [?doc :form/type :type/string]]))
+
+(def improperly-documented-fns
+  (quote
+   [:find (count ?v) .
+    :where
+    [?v :list/head ?h]
+    [?h :symbol/value ?sym]
+    [(= ?sym "defn")]
+    [?v :list/tail ?t]
+    [?t :list/tail ?t2]
+    [?t2 :list/head ?doc]
+    [?doc :form/type :type/string]]))
+
+;;;;; OR and query inputs
+
+(def count-vars
+  (quote
+   [:find (count ?v) .
+    :where
+    [?v :list/head ?h]
+    [?h :symbol/value ?sym]
+    (or
+     [(= ?sym "defn")]
+     [(= ?sym "def")]
+     [(= ?sym "defmacro")]
+     [(= ?sym "defmulti")]
+     [(= ?sym "defprotocol")])]))
+
+(def count-vars-smart
+  (quote
+   [:find (count ?v) .
+    :in $ [?def ...]
+    :where
+    [?v :list/head ?h]
+    [?h :symbol/value ?sym]
+    [(= ?sym ?def)]]))
+
+(d/q count-vars-smart (d/db conn)
+     ["defn"
+      "def"
+      "defmacro"
+      "defmulti"
+      "defprotocol"])
 
 ;;;;; Index the source code of this project in the DB.
 
@@ -74,7 +121,12 @@
 
 (defn reindex-code! []
   (db/reset-db!)
-  (let [sources (map str (.listFiles (File. "src/editor/")))]
+  (let [sources (->> "src/editor/"
+                     #_"../reference/clojure/src/clj/clojure"
+                     File.
+                     .listFiles
+                     (map str)
+                     (filter (partial re-seq #"\.clj$")))]
     (run! #(d/transact conn [(datomify-src %)]) sources)))
 
 (defn example-1
@@ -85,3 +137,5 @@
 (defn example-2 [x y]
   "This is not where the docstring goes"
   (+ x y))
+
+(reindex-code!)
