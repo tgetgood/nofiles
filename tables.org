@@ -107,6 +107,62 @@
 
 	 Let's fix that and write a schema for the Clojure AST, otherwise know as
 	 S-expressions (plus data literals).
+** Datalog
+*** Description
+		The query language that Datomic uses is called Datalog.
+
+		Datalog is a subset of Prolog, but unlike full Prolog, a Datalog query on a
+		finite domain is guaranteed to terminate, which is a good property for a
+		query language.
+
+		Also unlike Prolog, the order of statements in Datalog doesn't effect whether
+		the query will terminate or not (since it will), but the order does have a
+		huge impact on performance.
+
+		However, Datalog is not Turing complete. In particular, it can't express
+		negation.
+
+		Datomic extends datalog by allowing you to add arbitrary clojure predicates
+		to your queries, including not.
+
+		In theory this could cause a query to never terminate, but there are
+		timeouts.
+*** Use
+		Remember that data is stored in triples [1072 :food/likes "apples"]
+
+		Query statements are also triples of the form [?who :food/likes "apples"]
+		where ?who in this case is a variable that the query engine will bind to any
+		matching datoms in the DB.
+
+		This act of binding is called unification.
+
+		Multiple queries are interpreted and conjuction, so the query
+
+		[[?who :food/likes "apples"]
+		 [?whoelse :person/likes ?who]]
+
+		will bind ?who and ?whoelse to all pairs of people where one liked apples,
+		and the other likes them.
+
+		This works better with real examples.
+** Time
+	 Time is a first class entity in Datomic. Every datom contains the time at
+	 which it was first perceived by the transactor.
+
+	 This means that even though the value of a datom can change over time, the
+	 value *now* will always be there if you look back to this point in time.
+
+	 This is a much lower level of immutability than Clojure uses as a whole. In
+	 fact it looks a lot like standard, mutable, place-oriented programming. And
+	 it is.
+
+	 The key difference is that although the values of things in a given place
+	 change over time, the value of a given place at a given time is permanent.
+
+	 Space-time addresses are unique.
+
+	 This gives the performance benefit of mutability, without ever losing data
+	 (or even clobbering it if you're careful.)
 ** Indicies
 	 Since everything is stored as a triple, there are only 6 possible
 	 indicies. Of these, Datomic only makes 4, because frankly the others aren't
