@@ -1,10 +1,10 @@
 (ns editor.core
   (:require [clojure.datafy :refer [datafy]]
+            [clojure.pprint :refer [pprint]]
             [datomic.api :as d]
             editor.db
             [editor.io :refer [clojurise datomify]]
-            [falloleen.core :as f]
-            )
+            [falloleen.core :as f])
   (:import [javafx.application Application Platform]
            [javafx.scene.canvas Canvas GraphicsContext]
            javafx.scene.layout.StackPane
@@ -52,30 +52,28 @@
     (let [res (apply f (map pull-from-datomic! args))]
       (save-to-datomic! res))))
 
-(def empty-codebase
-  {:topology {:renderer {:in #{:animation-frame} :def 'dumpalump.core/base-render}}
-   :namespaces {:dumpalump.core {:test '(fn [] "I do nothing.")
-                                 :base-render '(fn [frame]
-                                                 [(assoc f/circle
-                                                         :radius 100)])}}})
+(def codebase
+  (atom
+   {:topology {:renderer {:in #{:animation-frame} :def 'dumpalump.core/base-render}}
+    :namespaces {:dumpalump.core {:test '(fn [] "I do nothing.")
+                                  :base-render '(fn [frame]
+                                                  [(assoc f/circle
+                                                          :radius 100)])}}}))
 
-(def create-master-tx
-  [{:version/tag :master
-    :version/namespace (datomify empty-codebase)}])
+(defonce hosts (atom #{}))
 
-(defn pull-var [sym]
-  (get-in
-   (clojurise
-    (d/q '[:find (pull ?x [*]) .
-           :where
-           [?e :version/tag :master]
-           [?e :version/namespace ?x]]
-         (d/db conn)))
-   [:namespaces (keyword (namespace sym)) (keyword (name sym))]))
+;; TODO: Move this into Falloleen. This isn't the place to deal with the platform.
+(def host
+  (let [h (falloleen.hosts/default-host {:size [1000 1000]})]
+    (run! #(Platform/runLater (proxy [java.lang.Runnable] []
+                                (run [ ] (f/close! %))))
+          @hosts)
+    (reset! hosts #{h})
+    h))
 
-#_(defn str-v [sym]
-  (with-out-str (pprint (pull-var sym))))
-
-(def host (falloleen.hosts/default-host {:size [1000 1000]}))
-
-(f/draw! [(assoc f/circle :radius 200)] host)
+(f/draw! (-> [(assoc f/text :text (with-out-str (pprint (-> @codebase
+                                                            :namespaces
+                                                            :dumpalump.core
+                                                            :base-render))))]
+             (f/translate [10 200]))
+         host)
