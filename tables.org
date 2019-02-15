@@ -162,7 +162,7 @@
 	 Space-time addresses are unique.
 
 	 This gives the performance benefit of mutability, without ever losing data
-	 (or even clobbering it if you're careful.)
+	 (or even clobbering it if you're careful).
 ** Indicies
 	 Since everything is stored as a triple, there are only 6 possible
 	 indicies. Of these, Datomic only makes 4, because frankly the others aren't

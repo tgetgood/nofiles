@@ -12,7 +12,7 @@
   (let [tx-data (datomify data)
         tx @(d/transact conn [tx-data])]
     {:eid (get-in tx [:tempids (:tempid (meta tx-data))])
-     :time (d/next-t (:db-before tx))}))
+     :time (d/basis-t (:db-before tx))}))
 
 (defn pull! [{:keys [eid time] :as accessor}]
   (let [db (if time (d/as-of (d/db conn) time) (d/db conn))

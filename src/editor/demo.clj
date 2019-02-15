@@ -9,10 +9,9 @@
 ;;;;; Queries
 
 (def count-uses
-  (quote
-   [:find (count ?e) .
-    :in $ ?v
-    :where [?e :symbol/value ?v]]))
+  '[:find (count ?e) .
+   :in $ ?v
+   :where [?e :symbol/value ?v]])
 
 (d/q count-uses (d/db conn) "conj")
 
@@ -34,6 +33,7 @@
   (quote
    [:find (count ?v) .
     :where
+    [?v :form/type :type/list]
     [?v :list/head ?h]
     [?h :symbol/value ?sym]
     [(= ?sym "defn")]]))
@@ -66,16 +66,18 @@
 (d/q documented-defns (d/db conn))
 
 (def defn-rule
-  '[[(defn? ?v)
+  '[
+    [(defn? ?v)
       [?v :list/head ?h]
       [?h :symbol/value ?sym]
-      [(= ?sym "defn")]]])
+      [(= ?sym "defn")]]
+    ])
 
 (def improperly-documented-fns
   (quote
    [
-    :find (count ?v) .
-    ;; :find [(pull ?v cps) ...]
+    ;; :find (count ?v) .
+    :find [(pull ?v cps) ...]
     :in $ % cps
     :where
     [defn? ?v]
@@ -107,7 +109,7 @@
     [?el :vector.element/value ?arg]
     [?arg :symbol/value ?name]
     [(count ?name) ?len]
-    ;; [(!= ?name "&")]
+    [(!= ?name "&")]
     [(= ?len 1)]]))
 
 (d/q anonymous-fns-with-bad-arg-names (d/db conn))
@@ -134,7 +136,6 @@
 
 (d/q count-vars (d/db conn))
 
-
 (def count-vars-smart
   (quote
    [:find (count ?v) .
@@ -152,3 +153,24 @@
       "defprotocol"])
 
 ;;; Change over time
+
+(def e1
+  (push! {:a "map"
+          :with 2}))
+
+(def k (push! :new-key))
+
+(def v (push! #{:some :set :of :things}))
+
+(defn db-assoc [m k v]
+  (let [tx-data {:db/id (:eid m)
+                 :map/element {:db/id "el"
+                               :map.element/key (:eid k)
+                               :map.element/value (:eid v)}}
+        tx @(d/transact conn [tx-data])
+        time (d/basis-t (:db-after tx))]
+    (assoc m :time time)))
+
+(def e2 (db-assoc e1 k v))
+
+(def e3 (db-assoc e1 (push! :a) (push! {})))
