@@ -3,12 +3,15 @@
             [clojure.pprint :refer [pprint]]
             [datomic.api :as d]
             editor.db
+            [editor.events :as events]
             [editor.io :refer [clojurise datomify]]
             [falloleen.core :as f])
   (:import [javafx.application Application Platform]
            [javafx.scene.canvas Canvas GraphicsContext]
            javafx.scene.layout.StackPane
            javafx.scene.Scene
+           javafx.scene.Group
+           javafx.scene.Node
            javafx.scene.control.TextArea
            javafx.stage.Stage))
 
@@ -64,17 +67,23 @@
 (defmacro fx-thread [& body]
   `(let [p# (promise)]
     (Platform/runLater (proxy [Runnable] []
-                          (run [] (deliver p# (do ~@body)))))
+                          (run []
+                            (let [res# (do ~@body)]
+                              (deliver p# res#)))))
     p#))
 
 (defonce hosts (atom #{}))
 
 ;; TODO: Move this into Falloleen. This isn't the place to deal with the platform.
-#_(def host
+(def host
   (let [h (falloleen.hosts/default-host {:size [1000 1000]})]
     (run! #(fx-thread (f/close! %)) @hosts)
     (reset! hosts #{h})
     h))
+
+
+(fx-thread (events/bind-canvas! (.getScene (:stage host))))
+
 
 #_(f/draw! (-> [(assoc f/text :text (with-out-str (pprint (-> @codebase
                                                             :namespaces
@@ -88,6 +97,12 @@
    (let [s (Stage.)
          t (TextArea.)]
      (doto s
+       #_(.setAlwaysOnTop true)
        (.setScene (Scene. t))
        .show)
      {:stage s :area t})))
+
+
+(def p @(code-stage))
+
+(fx-thread (events/bind-text-area! (:area p)))
