@@ -9,6 +9,7 @@
            [javafx.scene.canvas Canvas GraphicsContext]
            javafx.scene.layout.StackPane
            javafx.scene.Scene
+           javafx.scene.control.TextArea
            javafx.stage.Stage))
 
 (def conn editor.db/conn)
@@ -60,20 +61,33 @@
                                                   [(assoc f/circle
                                                           :radius 100)])}}}))
 
+(defmacro fx-thread [& body]
+  `(let [p# (promise)]
+    (Platform/runLater (proxy [Runnable] []
+                          (run [] (deliver p# (do ~@body)))))
+    p#))
+
 (defonce hosts (atom #{}))
 
 ;; TODO: Move this into Falloleen. This isn't the place to deal with the platform.
-(def host
+#_(def host
   (let [h (falloleen.hosts/default-host {:size [1000 1000]})]
-    (run! #(Platform/runLater (proxy [java.lang.Runnable] []
-                                (run [ ] (f/close! %))))
-          @hosts)
+    (run! #(fx-thread (f/close! %)) @hosts)
     (reset! hosts #{h})
     h))
 
-(f/draw! (-> [(assoc f/text :text (with-out-str (pprint (-> @codebase
+#_(f/draw! (-> [(assoc f/text :text (with-out-str (pprint (-> @codebase
                                                             :namespaces
                                                             :dumpalump.core
-                                                            :base-render))))]
+                                                            :test))))]
              (f/translate [10 200]))
          host)
+
+(defn code-stage []
+  (fx-thread
+   (let [s (Stage.)
+         t (TextArea.)]
+     (doto s
+       (.setScene (Scene. t))
+       .show)
+     {:stage s :area t})))

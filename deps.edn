@@ -1,8 +1,4 @@
-{:deps    {org.clojure/clojure      {:mvn/version "1.10.0"}
-           macroexpanse/falloleen   {:local/root "/home/thomas/projects/falloleen"}
-           com.datomic/datomic-free {:mvn/version "0.9.5697"}}
- :paths   ["src"]
- :aliases {:main
-           {:jvm-opts ["--module-path" "/usr/lib/jvm/java-11-openjdk/lib/"
-                       "--add-modules" "javafx.controls"]}}
- }
+{:deps  {org.clojure/clojure      {:mvn/version "1.10.0"}
+         macroexpanse/falloleen   {:local/root "/home/thomas/projects/falloleen"}
+         com.datomic/datomic-free {:mvn/version "0.9.5697"}}
+ :paths ["src"]}
