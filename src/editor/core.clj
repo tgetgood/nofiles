@@ -75,34 +75,58 @@
 (defonce hosts (atom #{}))
 
 ;; TODO: Move this into Falloleen. This isn't the place to deal with the platform.
-(def host
+(defonce host
   (let [h (falloleen.hosts/default-host {:size [1000 1000]})]
     (run! #(fx-thread (f/close! %)) @hosts)
     (reset! hosts #{h})
     h))
 
 
-(fx-thread (events/bind-canvas! (.getScene (:stage host))))
+(fx-thread (events/bind-canvas! (.getScene ^Stage (:stage host)) {}))
 
 
 #_(f/draw! (-> [(assoc f/text :text (with-out-str (pprint (-> @codebase
                                                             :namespaces
                                                             :dumpalump.core
-                                                            :test))))]
+                                                            :base-render))))]
              (f/translate [10 200]))
          host)
+
+(defonce code-stages (atom []))
 
 (defn code-stage []
   (fx-thread
    (let [s (Stage.)
          t (TextArea.)]
+     (.setBorder t nil)
      (doto s
        #_(.setAlwaysOnTop true)
        (.setScene (Scene. t))
        .show)
+     (swap! code-stages conj s)
      {:stage s :area t})))
 
+(defn clear-stages! []
+  (run! #(fx-thread (.close ^Stage %)) @code-stages)
+  (reset! code-stages []))
 
-(def p @(code-stage))
+(def p
+  (do
+    (clear-stages!)
+    @(code-stage)))
 
-(fx-thread (events/bind-text-area! (:area p)))
+(def q (atom (clojure.lang.PersistentQueue/EMPTY)))
+
+(fx-thread
+ (events/bind-text-area! (:area p)
+   {:key-stroke (events/handler [e]
+                  (swap! q conj (.getText ^TextArea (:area p)))
+                  ) }))
+
+(.setText ^TextArea (:area p) (-> codebase deref :namespaces :dumpalump.core
+                        :base-render pprint with-out-str))
+
+(swap! codebase assoc-in [:namespaces
+                          :dumpalump.core
+                          :base-render]
+       (read-string (.getText ^TextArea (:area p))))

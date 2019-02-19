@@ -16,30 +16,34 @@
   (handler [e]
     (println e)))
 
-(defn bind-canvas! [^Scene node]
-  (doto node
-    (.setOnMousePressed (handler [e] (println :md)))
-    (.setOnMouseReleased (handler [e] (println :mu)))
-    (.setOnMouseMoved (handler [e] (println :mu)))
+(def binding-map
+  {:mouse-down 'setOnMouseDown
+   :mouse-up   'setOnMouseReleased
+   :mouse-in   'setOnMouseEntered
+   :mouse-out  'setOnMouseExited
+   :click      'setOnMousePressed
 
-    (.setOnMouseEntered (handler [e] (println :mouse-in)))
-    (.setOnMouseExited (handler [e] (println :mouse-out)))
+   :key-down   'setOnKeyPressed
+   :key-up     'setOnKeyReleased
+   :key-stroke 'setOnKeyTyped})
 
+(defmacro create-binder
+  [type handlers]
+  (let [x (with-meta (gensym) {:tag type})]
+    `(fn [~x]
+       (do
+         ~@(map
+            (fn [[k# v#]]
+              `(. ~x ~(get binding-map k#) ~v#))
+            handlers)))))
 
-    (.setOnKeyTyped ph)
-    (.setOnKeyPressed (handler [e] (println :kd)))
-    (.setOnKeyReleased (handler [e] (println :ku)))
-   ))
+(defmacro bind-text-area!
+  {:style/indent [1]}
+  [node handlers]
+  `((create-binder Node ~handlers) ~node))
 
-(defn bind-text-area! [^Node node]
-  (doto node
-    (.setOnMouseClicked (handler [e] (println :click)))
-
-    (.setOnMouseMoved (handler [e] (println :mu)))
-    (.setOnMouseEntered (handler [e] (println :mouse-in)))
-    (.setOnMouseExited (handler [e] (println :mouse-out)))
-
-    (.setOnKeyTyped ph)
-    (.setOnKeyPressed (handler [e] (println :kd)))
-    (.setOnKeyReleased (handler [e] (println :ku)))
-    ))
+(defmacro bind-canvas!
+  "This is more than a little ugly."
+  {:style/indent [1]}
+  [node handlers]
+  `((create-binder Scene ~handlers) ~node))
