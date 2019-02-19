@@ -1,4 +1,5 @@
 {:deps  {org.clojure/clojure      {:mvn/version "1.10.0"}
+         org.clojure/core.async   {:mvn/version "0.4.490"}
          macroexpanse/falloleen   {:local/root "/home/thomas/projects/falloleen"}
          com.datomic/datomic-free {:mvn/version "0.9.5697"}}
  :paths ["src"]}
