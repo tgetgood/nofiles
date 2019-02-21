@@ -1,5 +1,6 @@
 (ns editor.core
-  (:require [clojure.datafy :refer [datafy]]
+  (:require [clojure.core.async :as async]
+            [clojure.datafy :refer [datafy]]
             [clojure.pprint :refer [pprint]]
             [datomic.api :as d]
             editor.db
@@ -56,14 +57,22 @@
     (let [res (apply f (map pull-from-datomic! args))]
       (save-to-datomic! res))))
 
-(def codebase
+(defonce system
   (atom
    {:topology {:renderer {:in #{:animation-frame} :def 'dumpalump.core/base-render}}
     :namespaces {:dumpalump.core {:test '(fn [] "I do nothing.")
                                   :base-render '(fn [frame]
-                                                  [(assoc f/circle
-                                                          :radius 100)])}}}))
+                                                  [(assoc f/circle :radius 100)])}}
+    :code-views {:primary :dumpalump.core/base-render}
+    :messages []}))
 
+(defn init-signals! [system]
+  (map (fn [[k v]]
+         (let [{:keys [in def]} v
+               out (async/chan)]))
+       (:topology system)))
+
+;; TODO: Move this into Falloleen. This isn't the place to deal with the platform.
 (defmacro fx-thread [& body]
   `(let [p# (promise)]
     (Platform/runLater (proxy [Runnable] []
@@ -74,7 +83,6 @@
 
 (defonce hosts (atom #{}))
 
-;; TODO: Move this into Falloleen. This isn't the place to deal with the platform.
 (defonce host
   (let [h (falloleen.hosts/default-host {:size [1000 1000]})]
     (run! #(fx-thread (f/close! %)) @hosts)
@@ -83,14 +91,6 @@
 
 
 (fx-thread (events/bind-canvas! (.getScene ^Stage (:stage host)) {}))
-
-
-#_(f/draw! (-> [(assoc f/text :text (with-out-str (pprint (-> @codebase
-                                                            :namespaces
-                                                            :dumpalump.core
-                                                            :base-render))))]
-             (f/translate [10 200]))
-         host)
 
 (defonce code-stages (atom []))
 
@@ -110,23 +110,31 @@
   (run! #(fx-thread (.close ^Stage %)) @code-stages)
   (reset! code-stages []))
 
-(def p
+(defonce p
   (do
     (clear-stages!)
     @(code-stage)))
 
-(def q (atom (clojure.lang.PersistentQueue/EMPTY)))
+(defonce q
+  (let [ch (async/chan (async/sliding-buffer 100))]
+    (async/go-loop []
+      (when-let [message (async/<! ch)]
+        (when (= :key-stroke (:type message))
+          (let [text (:text message)]
+            (try
+              (binding [*read-eval* false]
+                (let [form (read-string text)]
+                  (swap! system assoc-in [:namespaces :dumpalump.core]
+                         {:base-render form :*base-render* nil})))
+              (catch Exception e
+                (swap! system assoc-in [:namespaces :dumpalump.core
+                                        :*base-render*]
+                       text)))))
+        (recur)))
+    ch))
 
 (fx-thread
  (events/bind-text-area! (:area p)
    {:key-stroke (events/handler [e]
-                  (swap! q conj (.getText ^TextArea (:area p)))
-                  ) }))
-
-(.setText ^TextArea (:area p) (-> codebase deref :namespaces :dumpalump.core
-                        :base-render pprint with-out-str))
-
-(swap! codebase assoc-in [:namespaces
-                          :dumpalump.core
-                          :base-render]
-       (read-string (.getText ^TextArea (:area p))))
+                  (async/put! q {:type :key-stroke
+                                 :text (.getText ^TextArea (:area p))}))}))
