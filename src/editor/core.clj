@@ -59,7 +59,7 @@
 
 (defonce system
   (atom
-   {:topology {:renderer {:in #{:animation-frame} :def 'dumpalump.core/base-render}}
+   {:topology {:render {:state {}}}
     :namespaces {:dumpalump.core {:test '(fn [] "I do nothing.")
                                   :base-render '(fn [frame]
                                                   [(assoc f/circle :radius 100)])}}
@@ -138,3 +138,21 @@
    {:key-stroke (events/handler [e]
                   (async/put! q {:type :key-stroke
                                  :text (.getText ^TextArea (:area p))}))}))
+
+(defrecord OutEffectTransducer [listen process!])
+
+(defn create-code-window [sym]
+  (let [ns (keyword (namespace sym))
+        n (keyword (name sym))
+        form (get-in @system [:namespaces ns n])
+        text (with-out-str (pprint form))]
+    (OutEffectTransducer. #{:key-stroke :key-down :key-up}
+                          )))
+
+(def example-xform
+  {:key-down (fn [previous event]
+               (assoc previous :alt? (= (.keyCode event) "Alt")))
+   :edit (fn [previous {:keys [text]}]
+           (if (:alt? previous)
+             previous
+             (assoc previous :emit text)))})
