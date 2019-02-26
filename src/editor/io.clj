@@ -1,5 +1,7 @@
 (ns editor.io
-  (:require [datomic.api :as d]))
+  (:require [clojure.datafy :refer [datafy]]
+            [datomic.api :as d]
+            editor.db))
 
 (defprotocol Datomify
   (tx [this tempid]))
@@ -179,3 +181,44 @@
      :map/element          ...
      :map.element/key      ...
      :map.element/value    ...}])
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Read-write data to datomic.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(def conn editor.db/conn)
+
+(defn save-to-datomic! [data]
+  (let [tx-data (datomify data)
+        tx @(d/transact conn [tx-data])]
+    {:eid (get-in tx [:tempids (:tempid (meta tx-data))])
+     :time (d/next-t (:db-before tx))}))
+
+(defn pull-from-datomic! [{:keys [eid time] :as accessor}]
+  (let [db (d/db conn)
+        d  (clojurise (d/pull (d/as-of db time) '[*] eid))]
+    (if (instance? clojure.lang.IMeta d)
+      (with-meta d (assoc (meta d) :db-link accessor))
+      d)))
+
+(defn builtin? [x]
+  (contains? (:publics (datafy (the-ns 'clojure.core))) x))
+
+(defn write-fn! [form]
+  (let [tx-data [{:db/id "the-fn"
+                  :function/form (datomify form)}]
+        tx @(d/transact conn tx-data)]
+    {:eid (get-in tx [:tempids "the-fn"]) :time (d/next-t (:db-before tx))}))
+
+(defn load-fn! [{:keys [eid time] :as a}]
+  (let [db   (d/db conn)
+        fid  (d/q [:find '?e '. :where [eid :function/form '?e]]
+                  (d/as-of db time))
+        form (pull-from-datomic! (assoc a :eid fid))]
+    (with-meta (eval form) {:source-form form
+                            :db-link     a})))
+
+(defn db-lift [f]
+  (fn [& args]
+    (let [res (apply f (map pull-from-datomic! args))]
+      (save-to-datomic! res))))
