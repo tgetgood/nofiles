@@ -1,13 +1,10 @@
 (ns editor.events
   "Respond to javafx events. This shouldn't be in this project."
   (:require [clojure.core.async :as async]
-            [clojure.datafy :refer [datafy]]
             [editor.jfx :as fx])
   (:import [javafx.event Event EventHandler]
-           [javafx.scene.input KeyEvent]
            javafx.scene.control.TextArea
-           javafx.scene.Node
-           javafx.scene.Scene))
+           javafx.scene.input.KeyEvent))
 
 (defmacro handler
   {:style/indent [1]}
@@ -34,6 +31,7 @@
   [^TextArea x ^KeyEvent ev]
   {:caret (.getCaretPosition x)
    :char (.getCharacter ev)
+   :typed (.getText ev)
    :text (.getText x)})
 
 (def binding-map
@@ -48,28 +46,28 @@
    :key-stroke 'setOnKeyTyped})
 
 (defn ch-handler [event-xform]
-  (let [c (async/chan (async/sliding-buffer 128))]
-    [(handler [ev] (async/put! c (event-xform ev))) c]))
+  (let [c (async/chan (async/sliding-buffer 128) (map event-xform))]
+    [(handler [ev] (async/put! c ev)) c]))
 
-(defmacro text-area-binder
+(defmacro binder
   "Binds event handlers to the given JFX object and returns a map from event
   names to channels that will receive events."
-  []
-  (let [x (gensym)]
-    `(fn [^Node ~x]
+  [tag ev-parse]
+  (let [x (with-meta (gensym) {:tag tag})]
+    `(fn [~x]
        (into {}
              [~@(map
                  (fn [[k# v#]]
                    (let [hs (gensym)
                          cs (gensym)]
-                     `(let [[~hs ~cs] (ch-handler (partial datafy-event ~x))]
+                     `(let [[~hs ~cs] (ch-handler (partial ~ev-parse ~x))]
                         (fx/fx-thread (. ~x ~v# ~hs))
                         [~k# ~cs])))
                  binding-map)]))))
 
 (defmacro bind-text-area!
   [node]
-  `((text-area-binder) ~node))
+  `((binder TextArea datafy-event) ~node))
 
 ;; (defmacro bind-canvas!
 ;;   "This is more than a little ugly."

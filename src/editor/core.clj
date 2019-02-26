@@ -3,38 +3,70 @@
             [clojure.pprint :refer [pprint]]
             [editor.events :as events]
             [editor.jfx :as fx]
+            [editor.rt :as rt]
             [falloleen.core :as f])
   (:import javafx.scene.control.TextArea
            javafx.stage.Stage))
 
-(defonce system
-  (atom
-   {:topology {:render {:state {}}}
-    :namespaces {:dumpalump.core {:test '(fn [] "I do nothing.")
-                                  :base-render '(fn [frame]
-                                                  [(assoc f/circle :radius 100)])}}
-    :code-views {:primary :dumpalump.core/base-render}
-    :messages []}))
+(defn create-code-stage []
+  (let [p @(fx/code-stage)
+        ev-map (events/bind-text-area! (:area p))]
+    {:node (:area p) :stage (:stage p) :event-streams ev-map}))
 
-(defonce host
-  (falloleen.hosts/default-host {:size [1000 1000]}))
+;;;;; Transducers
 
-(defonce p
-  @(fx/code-stage))
+(defn edits [ev]
+  (:text ev))
 
-(defonce ev-map
-  (events/bind-text-area! (:area p)))
+(def form
+  {:edit (fn [prev text]
+           (try
+             {:emit (read-string text)}
+             (catch Exception e {:unreadable text})))})
 
-#_(def example-xform
-  {:key-down (fn [previous event]
-               (assoc previous :alt? (= (.keyCode event) "Alt")))
-   :edit (fn [previous {:keys [text]}]
-           (if (:alt? previous)
-             previous
-             (assoc previous :emit text)))})
+(defn display [branch ns n]
+  (fn [image]
+    (get-in image [:code branch ns n])))
 
-(defn code-edit-sub-network
-  "Creates a new editor window, returns the transduction network that connects
-  its events and the codebase to the rendered code and the code edit effector."
-  [branch name]
-  )
+(defn format-code-text [form]
+  (with-out-str (pprint form)))
+
+;;;;; Topo
+
+;; (defn set-text-area [branch ns n ^TextArea t]
+;;   (let [d (display branch ns n)]
+;;     (fn [image]
+;;       (let [caret (.getCaretPosition t)]
+;;         (fx/fx-thread
+;;          (.setText t (with-out-str (pprint (d image))))
+;;          (.positionCaret t caret))))))
+
+;; (defn wire-it-up! [branch ns n obj]
+;;   (let [text-setter (set-text-area branch ns n obj)
+;;         source-out (rt/source-effector branch ns n)]
+
+;;     (text-setter @rt/image)
+
+;;     (async/go-loop []
+;;       (when-let [m (async/<! rt/image-stream)]
+;;         (text-setter m)
+;;         (recur)))
+
+;;     (async/go-loop [prev {}]
+;;       (when-let [m (async/<! (:key-stroke ev-map))]
+;;         (let [m (edits m)
+;;               o ((:edit form) prev m)]
+;;           (when-let [next (:emit o)]
+;;             (source-out next))
+;;           (recur o))))))
+
+(defn create-topo-new-editor [branch ns n]
+  (let [{:keys [^TextArea node event-streams]} (create-code-stage)
+        text-render (fn [text]
+                      (fx/fx-thread
+                       (let [caret (.getCaretPosition node)]
+                         (.setText node text)
+                         (.positionCaret node caret))))]
+    [[:wire rt/image-stream (display branch ns n) format-code-text text-render]
+     [:wire (:key-stroke event-streams) edits form
+      (rt/source-effector branch ns n)]]))

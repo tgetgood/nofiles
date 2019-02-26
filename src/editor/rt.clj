@@ -2,15 +2,24 @@
   (:require [clojure.core.async :as async]))
 
 (defonce image
-  (atom {:topology {}
+  (atom {:topology []
          :code {:master {:core {:foo '{:a 4
                                        :b (fn [] 33)}}}}}))
+
+(defonce image-stream
+  (let [c (async/chan 32)]
+    (add-watch image :stream
+               (fn [_ _ _ state]
+                 (async/put! c state)))
+    c))
+
+
 
 (defn graph-merge [g h]
   )
 
 (defn add-to-topology [network]
-  (swap! image update :topology graph-merge network))
+  (swap! image update :topology into network))
 
 (defn topology-effector []
   (fn [m]

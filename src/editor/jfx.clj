@@ -20,10 +20,8 @@
          t (TextArea.)]
      (.setBorder t nil)
      (doto s
-       #_(.setAlwaysOnTop true)
        (.setScene (Scene. t))
        .show)
-     (swap! code-stages conj s)
      {:stage s :area t})))
 
 (defn clear-stages! []
