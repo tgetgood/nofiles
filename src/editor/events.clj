@@ -4,6 +4,8 @@
             [clojure.datafy :refer [datafy]]
             [editor.jfx :as fx])
   (:import [javafx.event Event EventHandler]
+           [javafx.scene.input KeyEvent]
+           javafx.scene.control.TextArea
            javafx.scene.Node
            javafx.scene.Scene))
 
@@ -14,19 +16,25 @@
      (handle [^Event ~@binding]
        ~@body)))
 
-(defmulti datafy-event (fn [^Event ev] (.getName (.getEventType ev))))
+(defmulti datafy-event (fn [x ^Event ev] (.getName (.getEventType ev))))
 
 (defmethod datafy-event :default
-  [ev]
+  [x ev]
   ev)
 
 (defmethod datafy-event "MOUSE_ENTERED"
-  [ev]
+  [x ev]
   ev)
 
 (defmethod datafy-event "MOUSE_EXITED"
-  [ev]
+  [x ev]
   ev)
+
+(defmethod datafy-event "KEY_TYPED"
+  [^TextArea x ^KeyEvent ev]
+  {:caret (.getCaretPosition x)
+   :char (.getCharacter ev)
+   :text (.getText x)})
 
 (def binding-map
   {:mouse-down 'setOnMousePressed
@@ -39,31 +47,29 @@
    :key-up     'setOnKeyReleased
    :key-stroke 'setOnKeyTyped})
 
-(defn ch-handler []
-  (let [c (async/chan (async/sliding-buffer 128))
-        f (fn [ev] (async/put! c (datafy-event ev)))]
-    [(handler [ev] (f ev)) c]))
+(defn ch-handler [event-xform]
+  (let [c (async/chan (async/sliding-buffer 128))]
+    [(handler [ev] (async/put! c (event-xform ev))) c]))
 
-(defmacro node-binder
+(defmacro text-area-binder
   "Binds event handlers to the given JFX object and returns a map from event
   names to channels that will receive events."
-  [tag]
-  (let [x (with-meta (gensym) {:tag tag})]
-    `(fn [~x]
+  []
+  (let [x (gensym)]
+    `(fn [^Node ~x]
        (into {}
              [~@(map
                  (fn [[k# v#]]
                    (let [hs (gensym)
                          cs (gensym)]
-                     `(let [[~hs ~cs] (ch-handler)]
+                     `(let [[~hs ~cs] (ch-handler (partial datafy-event ~x))]
                         (fx/fx-thread (. ~x ~v# ~hs))
                         [~k# ~cs])))
                  binding-map)]))))
 
-(defn bind-text-area!
-  {:style/indent [1]}
+(defmacro bind-text-area!
   [node]
-  ((node-binder Node) node))
+  `((text-area-binder) ~node))
 
 ;; (defmacro bind-canvas!
 ;;   "This is more than a little ugly."
