@@ -21,8 +21,8 @@
 (def form
   {:edit (fn [prev text]
            (try
-             {:emit (read-string text)}
-             (catch Exception e {:unreadable text})))})
+             (read-string text)
+             (catch Exception e nil)))})
 
 (defn display [branch ns n]
   (fn [image]
@@ -67,6 +67,6 @@
                        (let [caret (.getCaretPosition node)]
                          (.setText node text)
                          (.positionCaret node caret))))]
-    [[:wire rt/image-stream (display branch ns n) format-code-text text-render]
-     [:wire (:key-stroke event-streams) edits form
+    [[:wire rt/image-signal (display branch ns n) format-code-text text-render]
+     [:wire (:key-stroke event-streams) edits (:edit form)
       (rt/source-effector branch ns n)]]))
