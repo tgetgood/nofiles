@@ -8,65 +8,54 @@
   (:import javafx.scene.control.TextArea
            javafx.stage.Stage))
 
+;;;;; Builtins
+
 (defn create-code-stage []
   (let [p @(fx/code-stage)
         ev-map (events/bind-text-area! (:area p))]
     {:node (:area p) :stage (:stage p) :event-streams ev-map}))
 
-;;;;; Transducers
+;;;;; Exp
 
-(defn edits [ev]
-  (:text ev))
+(def built-in-code
+  {:editor
+   {:core
+    {:edits (fn [ev]
+              (:text ev))
 
-(def form
-  {:edit (fn [prev text]
-           (try
-             (read-string text)
-             (catch Exception e nil)))})
+     :form {:edit (fn [prev text]
+                    (try
+                      {:emit (read-string text)}
+                      (catch Exception e {:unreadable text})))}
 
-(defn display [branch ns n]
-  (fn [image]
-    (get-in image [:code branch ns n])))
+     :display (fn [branch ns n]
+                (fn [image]
+                  (get-in image [:code branch ns n])))
 
-(defn format-code-text [form]
-  (with-out-str (pprint form)))
+     :format-code-text (fn [form]
+                         (with-out-str (pprint form)))}}})
 
-;;;;; Topo
-
-;; (defn set-text-area [branch ns n ^TextArea t]
-;;   (let [d (display branch ns n)]
-;;     (fn [image]
-;;       (let [caret (.getCaretPosition t)]
-;;         (fx/fx-thread
-;;          (.setText t (with-out-str (pprint (d image))))
-;;          (.positionCaret t caret))))))
-
-;; (defn wire-it-up! [branch ns n obj]
-;;   (let [text-setter (set-text-area branch ns n obj)
-;;         source-out (rt/source-effector branch ns n)]
-
-;;     (text-setter @rt/image)
-
-;;     (async/go-loop []
-;;       (when-let [m (async/<! rt/image-stream)]
-;;         (text-setter m)
-;;         (recur)))
-
-;;     (async/go-loop [prev {}]
-;;       (when-let [m (async/<! (:key-stroke ev-map))]
-;;         (let [m (edits m)
-;;               o ((:edit form) prev m)]
-;;           (when-let [next (:emit o)]
-;;             (source-out next))
-;;           (recur o))))))
-
+;; REVIEW: Really verbose, but that might well be the best way. This isn't
+;; intended for human manipulation.
 (defn create-topo-new-editor [branch ns n]
   (let [{:keys [^TextArea node event-streams]} (create-code-stage)
+
         text-render (fn [text]
                       (fx/fx-thread
                        (let [caret (.getCaretPosition node)]
                          (.setText node text)
                          (.positionCaret node caret))))]
-    [[:wire rt/image-signal (display branch ns n) format-code-text text-render]
-     [:wire (:key-stroke event-streams) edits (:edit form)
-      (rt/source-effector branch ns n)]]))
+    {:inputs    {::image       {:in rt/image-signal}
+                 ::key-strokes {:in (:key-stroke event-streams)}}
+     :effectors {::text-render text-render
+                 ::code-change (rt/source-effector branch ns n)}
+     :nodes     {::code-1 {:input (display branch ns n)}
+                 ::code-2 {:input format-code-text}
+                 ::edits  {:input edits}
+                 ::form   form}
+     :links     #{[::code-1 {:input ::key-strokes}]
+                  [::code-2 {:input ::code-1}]
+                  [::text-render {:in ::code-2}]
+                  [::form {:edit ::edits}]
+                  [::edits {:input ::key-strokes}]
+                  [::image {:in ::form}]}}))

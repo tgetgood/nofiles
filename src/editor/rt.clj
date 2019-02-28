@@ -2,58 +2,10 @@
   (:refer-clojure :exclude [peek])
   (:require [clojure.core.async :as async]))
 
-(defprotocol ISignal
-  (subscribe [this key] [this key opts]
-    "Returns a channel which receives messages emitted by this signal")
-  (peek [this])
-  (disconnect [this key]))
-
-(deftype Signal [input ^:volatile-mutable _last ^:volatile-mutable _listeners]
-  ISignal
-  (peek [this]
-    _last)
-  (subscribe [this k]
-    (subscribe this k {}))
-  (subscribe [this k opts]
-    (let [ch (async/chan (async/sliding-buffer 128))]
-      (assert (not (contains? _listeners k))
-              (str "Listener named " k " already registered. "
-                   "I can't let you clobber that."))
-      (set! _listeners (assoc _listeners k ch))
-      (when-not (= _last ::uninitialised)
-        (async/put! ch _last))
-      ch))
-  (disconnect [this k]
-    (when-let [ch (get _listeners k)]
-      (async/close! ch)
-      (set! _listeners (dissoc _listeners k)))))
-
-(defn signal
-  ([]
-   (signal (async/chan (async/sliding-buffer 128))))
-  ([ch]
-   (Signal. ch ::uninitialised {})))
-
-(defprotocol T
-  (running? [this])
-  (start! [this])
-  (stop! [this]))
-
-(defrecord Transducer [methods inputs output running?])
-
-(defn wire [methodmap input-signals]
-  (if (and (fn? methodmap) (satisfies? ISignal input-signals))
-    (recur {::token methodmap} {::token input-signals})
-    (let [output (signal)
-          t (Transducer. methodmap input-signals output)]
-      ;; TODO: Check that everything is connected
-
-      )))
-
 (defonce image
-  (atom {:topology []
-         :code {:master {:core {:foo '{:a 4
-                                       :b (fn [] 33)}}}}}))
+  (atom {:master {:topology   {}
+                  :namespaces {:core {:foo '{:a 4
+                                             :b (fn [] 33)}}}}}))
 
 (defonce image-signal
   (let [c (async/chan 32)]
@@ -82,7 +34,8 @@
   )
 
 (defn add-to-topology [network]
-  (swap! image update :topology into network))
+  (swap! image update :topology #(merge-with merge % network))
+  (rewire! topology))
 
 (defn topology-effector []
   (fn [m]
