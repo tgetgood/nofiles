@@ -1,11 +1,31 @@
 (ns editor.rt
-  (:refer-clojure :exclude [peek])
   (:require [clojure.core.async :as async]))
 
 (defonce image
-  (atom {:master {:topology   {}
-                  :namespaces {:core {:foo '{:a 4
-                                             :b (fn [] 33)}}}}}))
+  (agent {:master {:topology   {}
+                   :namespaces {}}}))
+
+(defn load-code [code]
+  (send image update-in [:master :namespaces] #(merge-with merge % code)))
+
+(defn load-up-code [code]
+  #_(let [n *ns*]
+    (namespace ))
+  )
+
+(defn eval-from-code [sym]
+  (let [ns (the-ns (symbol (namespace sym)))]
+    ))
+
+(defonce system (atom {}))
+
+(defn connect! [system network]
+  )
+
+(defn update-topology [topology network]
+  (connect! topology network))
+
+(def signal identity)
 
 (defonce image-signal
   (let [c (async/chan 32)]
@@ -34,8 +54,8 @@
   )
 
 (defn add-to-topology [network]
-  (swap! image update :topology #(merge-with merge % network))
-  (rewire! topology))
+  (send image update :topology #(merge-with merge % network))
+  )
 
 (defn topology-effector []
   (fn [m]
